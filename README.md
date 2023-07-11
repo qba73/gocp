@@ -1,9 +1,6 @@
-# Go Concurrency Patterns
+# Go Concurrency Patterns Playground
 
-
-
-Code examples and docs are based on various conference talks.
-
+This repository contains notes, sketches and code examples and experiments based on Go code presented during various conference talks.
 
 ## Introduction
 
