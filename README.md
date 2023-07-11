@@ -152,3 +152,21 @@ The `select` statement provides another way to handle multiple channels. It's li
 
 - all channels are evaluated
 - selection blocks until one communication can proceed, which then does
+- if multiple can proceed, `select` chooses pseudo-randomly
+- a default clause, if present,executes immediately if no channel is ready
+
+Example:
+
+```go
+select {
+case v1 := <-c1:
+    fmt.Printf("received value %v from c1\n", v1)
+case v2 := <-c2:
+    fmt.Printf("received value %v from c2\n", v2)
+case c3 <- 10:
+    // Note: here you are sending value 10 to the channel c3
+    fmt.Printf("sent %v to c3\n", 10)
+default:
+    fmt.Printf("no one was ready to communicate\n")
+}
+```
