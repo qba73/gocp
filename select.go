@@ -81,3 +81,22 @@ func RunTimeAfter() {
 		}
 	}
 }
+
+// RunTimeAfterEntireConversation illustrates timing out
+// the entire conversation.
+// Create the timer once, outside of the loop, to time out
+// the entire conversation. Note that in the func RunTimeAfter
+// we have a timeout for each message.
+func RunTimeAfterEntireConversation() {
+	c := boringSelect("Bolek")             // Create a generator
+	timeout := time.After(5 * time.Second) // Create a func scoped timeout (chan)
+	for {
+		select {
+		case s := <-c: // keep getting values from the channel
+			fmt.Println(s)
+		case <-timeout: // when the value is available on this channel take it and return
+			fmt.Println("You talk too much")
+			return
+		}
+	}
+}
