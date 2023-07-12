@@ -83,7 +83,7 @@ func RunTimeAfter() {
 }
 
 // RunTimeAfterEntireConversation illustrates timing out
-// the entire conversation.
+// the entire conversation (for loop).
 // Create the timer once, outside of the loop, to time out
 // the entire conversation. Note that in the func RunTimeAfter
 // we have a timeout for each message.
@@ -99,4 +99,34 @@ func RunTimeAfterEntireConversation() {
 			return
 		}
 	}
+}
+
+// RunQuit shows how to quit generator by sending a "signal" to the quit channel.
+// boring generator stops putting values on the c channel when quit chan receives
+// a value. Once value is placed on the quit channel select - case <- quit
+// executes and exits the for loop.
+func RunQuit() {
+
+	boring := func(msg string, quit chan bool) chan string {
+		c := make(chan string)
+		go func() {
+			for i := 0; ; i++ {
+				select {
+				case c <- fmt.Sprintf("%s %d", msg, i):
+					// do nothing
+					time.Sleep(time.Duration(rand.Intn(1e3)) * time.Millisecond)
+				case <-quit:
+					return
+				}
+			}
+		}()
+		return c
+	}
+
+	quit := make(chan bool)
+	c := boring("Lolek", quit)
+	for i := rand.Intn(10); i >= 0; i-- {
+		fmt.Println(<-c)
+	}
+	quit <- true
 }
