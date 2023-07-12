@@ -170,3 +170,9 @@ default:
     fmt.Printf("no one was ready to communicate\n")
 }
 ```
+
+## Go for creating systems software
+
+Practical examples:
+
+- R. Pike TY [video part](https://youtu.be/f6kdp27TYZs?t=1680) - building a web search engine
