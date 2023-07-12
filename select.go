@@ -132,3 +132,35 @@ func RunQuit() {
 	}
 	quit <- true // sent a signal to the generator to stop
 }
+
+// RunQuitWithCleanup illustrates two-way communication. We send a signal to quit producing and putting on the channel data.
+// Then we call clanup func and then we send a confirmation message on the same channel.
+func RunQuitWithCleanup() {
+	cleanup := func() { fmt.Println("got a signal to exit. cleaning up!") }
+
+	boring := func(msg string, quit chan string) chan string {
+		c := make(chan string)
+		go func() {
+			for i := 0; ; i++ {
+				select {
+				case c <- fmt.Sprintf("%s %d", msg, i):
+					// do nothing
+					time.Sleep(time.Duration(rand.Intn(1e3)) * time.Millisecond)
+				case <-quit:
+					cleanup() // run possible cleanup
+					quit <- "see you!"
+					return
+				}
+			}
+		}()
+		return c
+	}
+
+	quit := make(chan string)
+	c := boring("Jonny", quit)
+	for i := rand.Intn(10); i >= 0; i-- {
+		fmt.Println(<-c)
+	}
+	quit <- "bye!"
+	fmt.Printf("Jonny says %s\n", <-quit)
+}

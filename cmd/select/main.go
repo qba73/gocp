@@ -11,5 +11,8 @@ func main() {
 
 	// example 3 - run Quit - explicitely send quit message to the channel
 	// and make it return - meaning stop generating data.
-	gocp.RunQuit()
+	//gocp.RunQuit()
+
+	// example 4
+	gocp.RunQuitWithCleanup()
 }
