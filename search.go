@@ -57,10 +57,35 @@ func GoogleGoroutines(query string) []Result {
 	return results
 }
 
+func GoogleSearchWithTimeout(query string) []Result {
+	c := make(chan Result)
+
+	// Start a goroutine for each search and send results to the channel
+	for _, s := range []Search{Web, Image, Video} {
+		go func(search Search) {
+			c <- search(query)
+		}(s)
+	}
+
+	var results []Result
+	timeout := time.After(80 * time.Millisecond) // timeout on the entire for loop
+	for i := 0; i < 3; i++ {
+		select {
+		case result := <-c:
+			results = append(results, result)
+		case <-timeout:
+			fmt.Println("timed out")
+			return results
+		}
+	}
+	return results
+}
+
 func RunSearch() {
 	start := time.Now()
 	//results := GoogleLinear("golang")
-	results := GoogleGoroutines("golang")
+	//results := GoogleGoroutines("golang")
+	results := GoogleSearchWithTimeout("golang")
 	elapsed := time.Since(start)
 	fmt.Println(results)
 	fmt.Println(elapsed)
