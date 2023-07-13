@@ -176,3 +176,61 @@ default:
 Practical examples:
 
 - R. Pike TY [video part](https://youtu.be/f6kdp27TYZs?t=1680) - building a web search engine
+
+### Search - linear approach
+
+### Search - 3 goroutines
+
+### Search - 3 goroutines in a loop
+
+### Search - 3 gorotines with a timeout
+
+```go
+var (
+    Web   = fakeSearch("Web")
+    Image = fakeSearch("Image")
+    Video = fakeSearch("Video")
+)
+
+type Result string
+
+type Search func(query string) Result
+
+func fakeSearch(kind string) Search {
+    return func(query string) Result {
+        time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+        return Result(fmt.Sprintf("%s result for %q\n", kind, query))
+    }
+}
+
+
+func GoogleSearchWithTimeout(query string) []Result {
+    c := make(chan Result)
+
+    // fan-in pattern start
+    // Start a goroutine for each search and send results to the channel
+    for _, s := range []Search{Web, Image, Video} {
+        go func(search Search) {
+            c <- search(query)
+        }(s)
+    }
+    // fan-in pattern end
+
+    var results []Result
+
+    // time out pattern for all 'conversation'
+    timeout := time.After(80 * time.Millisecond) // timeout on the entire for loop
+    for i := 0; i < 3; i++ {
+        select {
+        case result := <-c:
+            results = append(results, result)
+        case <-timeout:
+            fmt.Println("timed out")
+            return results
+        }
+    }
+    // end time out pattern
+
+    return results
+}
+```
