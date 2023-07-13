@@ -185,6 +185,8 @@ Practical examples:
 
 ### Search - 3 gorotines with a timeout
 
+Goal - do not wait for slow servers. Return results from searches that respond within defined time limit.
+
 ```go
 var (
     Web   = fakeSearch("Web")
@@ -234,3 +236,81 @@ func GoogleSearchWithTimeout(query string) []Result {
     return results
 }
 ```
+
+### Search - avoid timeouts by using search server replicas
+
+How to avoid discarting results from slow servers?
+
+The answer is replicate the servers! Send requests to multiple replicas, and use the first response.
+
+```go
+var (
+    Web   = fakeSearch("Web")
+    Image = fakeSearch("Image")
+    Video = fakeSearch("Video")
+)
+
+type Result string
+
+type Search func(query string) Result
+
+func fakeSearch(kind string) Search {
+    return func(query string) Result {
+        time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+        return Result(fmt.Sprintf("%s result for %q\n", kind, query))
+    }
+}
+
+func First(query string, replicas ...Search) Result {
+    c := make(chan Result)
+    searchReplica := func(i int) { c <- replicas[i](query) }
+    for i := range replicas {
+        go searchReplica(i)
+    }
+    return <-c // return result from search that responded first (the fastest)
+}
+
+func RunSearch() {
+    start := time.Now()
+    results := First("golang",
+        fakeSearch("replica 1"),
+        fakeSearch("replica 2"),
+    )
+    elapsed := time.Since(start)
+    fmt.Println(results)
+    fmt.Println(elapsed)
+}
+```
+
+### Search - final solution using all patterns
+
+Goal: reduce tail latency using replicated search servers.
+
+```go
+func GoogleSearchReplicas(query string) []Result {
+    c := make(chan Result) // channel for our serch results
+    // 3 goroutines for searching web, video and image using fastest replicas
+    go func() { c <- First(query, fakeSearch("web1"), fakeSearch("web2")) }()
+    go func() { c <- First(query, fakeSearch("video1"), fakeSearch("video2")) }()
+    go func() { c <- First(query, fakeSearch("image1"), fakeSearch("image2")) }()
+
+    var results []Result
+
+    timeout := time.After(80 * time.Millisecond) // "global timeout" for the entire search query (for web, video and image)
+    
+    for i := 0; i < 3; i++ {
+        select {
+        case res := <-c:
+            results = append(results, res)
+        case <-timeout:
+            fmt.Println("timed out")
+            return results
+        }
+    }
+    return results
+}
+```
+
+Final thoughts:
+
+In few transformations we used Go's concurrency primitives to convert slow, sequential and failure-sensitive program into one that is fast, concurrent, replicated and robust!

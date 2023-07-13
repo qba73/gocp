@@ -87,11 +87,62 @@ func GoogleSearchWithTimeout(query string) []Result {
 	return results
 }
 
+// =========
+// Example - how to avoid slow servers and use server replicas.
+// =========
+
+func First(query string, replicas ...Search) Result {
+	c := make(chan Result)
+	searchReplica := func(i int) { c <- replicas[i](query) }
+	for i := range replicas {
+		go searchReplica(i)
+	}
+	return <-c // return result from search that responded first (the fastest)
+}
+
+// =========
+// Example - putting together patterns, and create server replicas with timeout.
+//
+// Reducing tail latency using replicated search servers.
+// =========
+
+func GoogleSearchReplicas(query string) []Result {
+	c := make(chan Result) // channel for our serch results
+	// 3 goroutines for searching web, video and image using fastest replicas
+	go func() { c <- First(query, fakeSearch("web1"), fakeSearch("web2")) }()
+	go func() { c <- First(query, fakeSearch("video1"), fakeSearch("video2")) }()
+	go func() { c <- First(query, fakeSearch("image1"), fakeSearch("image2")) }()
+
+	timeout := time.After(80 * time.Millisecond) // "global timeout" for the entire search query (for web, video and image)
+	var results []Result
+
+	for i := 0; i < 3; i++ {
+		select {
+		case res := <-c:
+			results = append(results, res)
+		case <-timeout:
+			fmt.Println("timed out")
+			return results
+		}
+	}
+	return results
+}
+
 func RunSearch() {
 	start := time.Now()
 	//results := GoogleLinear("golang")
 	//results := GoogleGoroutines("golang")
-	results := GoogleSearchWithTimeout("golang")
+	// results := GoogleSearchWithTimeout("golang")
+
+	// Search with Replicas
+	// results := First("golang",
+	// 	fakeSearch("replica 1"),
+	// 	fakeSearch("replica 2"),
+	// )
+
+	// Search with replicas and time outs:
+	results := GoogleSearchReplicas("golang")
+
 	elapsed := time.Since(start)
 	fmt.Println(results)
 	fmt.Println(elapsed)
