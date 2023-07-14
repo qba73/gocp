@@ -128,8 +128,11 @@ func GoogleSearchWG(query string) []Result {
 
 	// fan-in pattern start
 	// Start a goroutine for each search and send results to the channel
-	for _, s := range []Search{Web, Image, Video} {
-		wg.Add(1)
+	searchFunctions := []Search{Web, Image, Video}
+
+	wg.Add(len(searchFunctions))
+
+	for _, s := range searchFunctions {
 		go func(search Search) {
 			defer wg.Done()
 			c <- search(query)
@@ -138,6 +141,8 @@ func GoogleSearchWG(query string) []Result {
 	// fan-in pattern end
 
 	// Wait for all searches to finish and close the channel.
+	// Note: we use goroutine here but only for illustration purpose.
+	// wg.Wait() and close(c) don't have to be launched in a goroutine.
 	go func() {
 		wg.Wait()
 		close(c)
@@ -146,10 +151,37 @@ func GoogleSearchWG(query string) []Result {
 	var results []Result
 
 	// Get results from the channel and aggregate
-	for r := range c {
-		results = append(results, r)
+	for range searchFunctions {
+		results = append(results, <-c)
 	}
 
+	// Or this way:
+	// for r := range c {
+	// 	results = append(results, r)
+	// }
+
+	return results
+}
+
+// GoogleSearchBufferedChannel illustrates how to run independent searches
+// without closing channels and wait groups
+func GoogleSearchBufferedChannel(query string) []Result {
+	c := make(chan Result, 3)
+
+	searchFunctions := []Search{Web, Image, Video}
+
+	for _, s := range searchFunctions {
+		go func(search Search) {
+			c <- search(query)
+		}(s)
+	}
+
+	var results []Result
+
+	// Get results from the channel and aggregate
+	for range searchFunctions {
+		results = append(results, <-c)
+	}
 	return results
 }
 
@@ -214,6 +246,9 @@ func RunSearch() {
 
 	// Search with WaitGroup
 	results := GoogleSearchWG("golang")
+
+	// Search independently with buffered channels.
+	//results := GoogleSearchBufferedChannel("golang")
 
 	elapsed := time.Since(start)
 	fmt.Println(results)
