@@ -3,6 +3,7 @@ package gocp
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -87,6 +88,71 @@ func GoogleSearchWithTimeout(query string) []Result {
 	return results
 }
 
+func GoogleSearchRange(query string) []Result {
+	c := make(chan Result)
+
+	// fan-in pattern start
+	// Start a goroutine for each search and send results to the channel
+	for _, s := range []Search{Web, Image, Video} {
+		go func(search Search) {
+			c <- search(query)
+		}(s)
+	}
+	// fan-in pattern end
+
+	var results []Result
+
+	// time out pattern for all 'conversation'
+	timeout := time.After(80 * time.Millisecond) // timeout on the entire for loop
+
+	for i := 0; i < 3; i++ {
+		select {
+		case res := <-c:
+			results = append(results, res)
+		case <-timeout:
+			fmt.Println("timeout")
+			return results
+		}
+	}
+	// end time out pattern
+
+	return results
+}
+
+// GoogleSearchWG illustrates how to run independent searches
+// and use WaitGroup
+func GoogleSearchWG(query string) []Result {
+	c := make(chan Result)
+
+	var wg sync.WaitGroup
+
+	// fan-in pattern start
+	// Start a goroutine for each search and send results to the channel
+	for _, s := range []Search{Web, Image, Video} {
+		wg.Add(1)
+		go func(search Search) {
+			defer wg.Done()
+			c <- search(query)
+		}(s)
+	}
+	// fan-in pattern end
+
+	// Wait for all searches to finish and close the channel.
+	go func() {
+		wg.Wait()
+		close(c)
+	}()
+
+	var results []Result
+
+	// Get results from the channel and aggregate
+	for r := range c {
+		results = append(results, r)
+	}
+
+	return results
+}
+
 // =========
 // Example - how to avoid slow servers and use server replicas.
 // =========
@@ -141,7 +207,13 @@ func RunSearch() {
 	// )
 
 	// Search with replicas and time outs:
-	results := GoogleSearchReplicas("golang")
+	// results := GoogleSearchReplicas("golang")
+
+	// Closing channel example
+	//results := GoogleSearchRange("golang")
+
+	// Search with WaitGroup
+	results := GoogleSearchWG("golang")
 
 	elapsed := time.Since(start)
 	fmt.Println(results)
