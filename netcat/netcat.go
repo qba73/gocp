@@ -2,6 +2,7 @@ package netcat
 
 import (
 	"io"
+	"log"
 	"net"
 	"os"
 )
@@ -12,12 +13,13 @@ func Run() error {
 		return err
 	}
 	defer conn.Close()
-	return copy(os.Stdout, conn)
+	go mustCopy(os.Stdout, conn)
+	mustCopy(conn, os.Stdout)
+	return nil
 }
 
-func copy(dst io.Writer, src io.Reader) error {
+func mustCopy(dst io.Writer, src io.Reader) {
 	if _, err := io.Copy(dst, src); err != nil {
-		return err
+		log.Fatal(err)
 	}
-	return nil
 }
