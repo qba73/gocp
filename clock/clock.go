@@ -22,7 +22,7 @@ func RunClock() error {
 			log.Println(err)
 			continue
 		}
-		handleConnectionClock(conn)
+		go handleConnectionClock(conn)
 	}
 }
 
