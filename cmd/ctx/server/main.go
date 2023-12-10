@@ -1,21 +1,22 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
+
+	"github.com/qba73/gocp/log"
 )
 
 func main() {
-	http.HandleFunc("/", handlerWithCTX)
-	//http.HandleFunc("/ctx", handlerWithCTX)
-	log.Fatal(http.ListenAndServe("127.0.0.1:8080", nil))
+	http.HandleFunc("/", log.Decorate(handlerWithCTX))
+	panic(http.ListenAndServe("127.0.0.1:8080", nil))
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("handler started")
-	defer log.Printf("handler ended")
+	log.Println(context.Background(), "handler started")
+	defer log.Println(context.Background(), "handler ended")
 
 	time.Sleep(5 * time.Second)
 	fmt.Fprintln(w, "sensor status: OK")
@@ -24,15 +25,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 func handlerWithCTX(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	log.Printf("handler with ctx started")
-	defer log.Printf("handler with ctx ended")
+	log.Println(ctx, "handler with ctx started")
+	defer log.Println(ctx, "handler with ctx ended")
 
 	select {
 	case <-time.After(5 * time.Second):
 		fmt.Fprintln(w, "sensor status: OK")
 	case <-ctx.Done():
 		err := ctx.Err()
-		log.Print(err)
+		log.Println(ctx, err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
