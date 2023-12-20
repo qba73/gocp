@@ -61,10 +61,6 @@ func handleConnection(conn net.Conn) {
 	for input.Scan() {
 		messages <- who + ": " + input.Text()
 	}
-	if err := input.Err(); err != nil {
-		// handle error here, possible in a new, error channel?
-		errors <- err
-	}
 
 	leaving <- ch
 	messages <- who + " has left"
