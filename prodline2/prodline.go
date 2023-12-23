@@ -1,6 +1,8 @@
 package prodline2
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"math/rand"
 	"time"
@@ -15,64 +17,92 @@ type Work func(d, stddev time.Duration)
 type ProductionLine struct {
 	Logger  log.Logger
 	Verbose bool
-	Items   int
+	Stages  []workerFn
+
+	output <-chan item
+	ctx    context.Context
 }
 
-// StartStage is a first stage in the production line.
-// At this stage items (products) are initially prepared
-// for furthe processing. This about this stage as a stage
-// where raw items are produced and sent to the next stage.
-func (pl *ProductionLine) StartStage(name string, out chan<- item, fn Work, d, stddev time.Duration) {
-	for i := 0; i < pl.Items; i++ {
-		c := item(i)
-		if pl.Verbose {
-			pl.Logger.Printf("starting stage %v, %d", c, i)
-		}
-		fn(d, stddev)
-		out <- c
-	}
-}
+type Stage struct{}
 
-// Stage represents an intermittent or the final stage in an imaginary
-// production line. It processes items that are sent by initial stage
-// on the incomming channel (in), processes the items and forwards
-// them to the next stage by placing them onto the outging channel (out).
-func (pl *ProductionLine) Stage(name string, in <-chan item, out chan<- item, fn Work, d, stddev time.Duration) {
-	for i := range in {
-		if pl.Verbose {
-			pl.Logger.Printf("stage %s, %v", name, i)
-		}
-		fn(d, stddev)
-		out <- i
-	}
+type workerFn func(context.Context, <-chan item, chan<- item)
+
+func (pl *ProductionLine) AddStage(name string, worker workerFn) {
+	pl.Stages = append(pl.Stages, worker)
 }
 
 // Run simulates running all stages of the production line.
 // It defines an initial and further stages of the line.
-func (pl *ProductionLine) Run() {
-	baked := make(chan item, 1)
-	iced := make(chan item, 1)
-	inscribed := make(chan item, 1)
-	packed := make(chan item, 1)
+func (pl *ProductionLine) Start() {
+	prev := make(chan item, 1)
 
-	go pl.StartStage("baking", baked, work, time.Second, 200*time.Millisecond)
-	go pl.Stage("icing", baked, iced, work, time.Second, 200*time.Millisecond)
-	go pl.Stage("inscribing", iced, inscribed, work, time.Second, 300*time.Millisecond)
-	go pl.Stage("packing", inscribed, packed, work, time.Second, 50*time.Millisecond)
+	go func(ctx context.Context, ch chan<- item) {
+		i := 0
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("first stage cancelled!")
+				close(ch)
+				return
+			default:
+				ch <- item(i)
+				i++
+			}
+		}
+	}(pl.ctx, prev)
 
-	// drain the packed channel
-	for i := 0; i < pl.Items; i++ {
-		<-packed
+	for _, stage := range pl.Stages {
+		out := make(chan item, 1)
+		go stage(pl.ctx, prev, out)
+		prev = out
+	}
+	pl.output = prev
+}
+
+func (pl *ProductionLine) Items() <-chan item {
+	return pl.output
+}
+
+// have a function that registers stages and run the full pipeline
+
+func newDummyStage(t, stddev time.Duration) workerFn {
+	return func(ctx context.Context, in <-chan item, out chan<- item) {
+		for item := range in {
+			select {
+			case <-ctx.Done():
+				fmt.Println("worker cancelled!")
+				close(out)
+				return
+			default:
+			}
+
+			delay := t + time.Duration(rand.NormFloat64()*float64(stddev))
+			time.Sleep(delay)
+			out <- item
+		}
 	}
 }
 
 func Run() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	pl := ProductionLine{
 		Logger:  *log.Default(),
 		Verbose: true,
-		Items:   3,
+		ctx:     ctx,
 	}
-	pl.Run()
+
+	pl.AddStage("baking", newDummyStage(time.Second, 200*time.Millisecond))
+	pl.AddStage("icing", newDummyStage(time.Second, 200*time.Millisecond))
+	pl.AddStage("inscribing", newDummyStage(time.Second, 200*time.Millisecond))
+	pl.AddStage("packaging", newDummyStage(time.Second, 200*time.Millisecond))
+
+	pl.Start()
+
+	for item := range pl.Items() {
+		fmt.Println(item)
+	}
 }
 
 func work(d, stddev time.Duration) {
