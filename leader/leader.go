@@ -11,6 +11,8 @@ func Run() {
 
 	//WaitForSignal()
 	FanOut()
+	fmt.Println("=== === === === ===")
+	WaitForTask()
 }
 
 func WaitForSignal() {
@@ -53,6 +55,21 @@ func FanOut() {
 		totalObj += p
 		fmt.Println("Total obj :", totalObj)
 	}
+
+	time.Sleep(time.Second)
+	fmt.Println("=========")
+}
+
+func WaitForTask() {
+	ch := make(chan string)
+
+	go func() {
+		p := <-ch
+		fmt.Println("minion : recv'd signal :", p)
+	}()
+
+	ch <- "label added"
+	fmt.Println("master : sent signal")
 
 	time.Sleep(time.Second)
 	fmt.Println("=========")
